@@ -26,9 +26,11 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
 // ---- Parametreler (cm) ----
-const LOBES = 5, PER = 12;          // 5 yaprak x 12 = 60 prizma
+const LOBES = 5, PER = 12;          // 5 kol x 12 quadriedri = 60 prizma
 const PET_D = 12, PET_R = 10;   // dış çap = 2*(12+10) = 44 cm       // yaprak dairesinin merkez uzaklığı / yarıçapı
-const SPAN = 1.9;                   // yaprak yayı yarı açısı (rad)
+const SPAN = 1.9;                   // kol yayı yarı açısı (rad)
+const SWIRL = 0.55;                 // kolların çark gibi kayması (rad)
+const STEP = 0.22;                  // yay boyunca her prizmanın kademeli sarkması (cm)
 const PRISM_L = 28;                 // cam yüksekliği 28 cm
 const ARMS = 6;                                   // kısa kıvrık kollar
 
@@ -114,9 +116,9 @@ for (let k = 0; k < LOBES; k++){
 }
 const V_DEPTH = 6;
 function prismPos(p, j){
-  const a = p.phi + (j / (PER - 1) - 0.5) * 2 * SPAN;
+  const a = p.phi + SWIRL + (j / (PER - 1) - 0.5) * 2 * SPAN;
   const x = p.cx + Math.cos(a) * PET_R, z = p.cz - Math.sin(a) * PET_R;
-  const y = -0.2 - V_DEPTH * (1 - Math.min(1, Math.hypot(x, z) / (PET_D + PET_R)));
+  const y = -0.2 - STEP * j - V_DEPTH * (1 - Math.min(1, Math.hypot(x, z) / (PET_D + PET_R)));
   return {a, x, y, z};
 }
 // Dal teller: göbek kenarından her prizmanın askı kıskacına kadar ince nikel çubuk
