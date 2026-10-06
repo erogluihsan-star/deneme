@@ -3,18 +3,18 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Murano Avize</title>
+<title>Murano Quadriedri Avize</title>
 <style>
-  html,body{margin:0;height:100%;background:#14161b;color:#e8e6e1;font-family:system-ui,sans-serif;overflow:hidden}
-  #ui{position:fixed;top:12px;left:12px;background:#0009;padding:10px 14px;border-radius:8px;font-size:14px;line-height:1.9}
+  html,body{margin:0;height:100%;background:#bfc3c8;color:#222;font-family:system-ui,sans-serif;overflow:hidden}
+  #ui{position:fixed;top:12px;left:12px;background:#fffa;padding:10px 14px;border-radius:8px;font-size:14px;line-height:1.9}
   label{display:block;cursor:pointer}
 </style>
 </head>
 <body>
 <div id="ui">
   <b>Bileşenler</b>
-  <label><input type="checkbox" id="skel" checked> İskelet (çerçeve)</label>
-  <label><input type="checkbox" id="glass" checked> Cam parçalar (prizmalar)</label>
+  <label><input type="checkbox" id="skel" checked> İskelet (nikel çerçeve)</label>
+  <label><input type="checkbox" id="glass" checked> Cam prizmalar (yıldız kesitli, 60 adet)</label>
 </div>
 <script type="importmap">
 {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
@@ -26,14 +26,15 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
 // ---- Parametreler (cm) ----
-const ARMS = 12;          // kol sayısı
-const ARM_R = 30;         // kol yarıçapı
-const RING_R = 14;        // iç halka yarıçapı
-const PRISMS_PER_ARM = 5; // her koldan sarkan prizma
-const DROPS_RING = 24;    // halkadan sarkan prizma
+const LOBES = 5, PER = 12;          // 5 yaprak x 12 = 60 prizma
+const PET_D = 10, PET_R = 7;       // yaprak dairesinin merkez uzaklığı / yarıçapı
+const SPAN = 1.9;                   // yaprak yayı yarı açısı (rad)
+const PRISM_L = 36;
+const ARMS = 5;                                   // kısa kıvrık kollar
+const CHAIN_LINKS = 26;
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x14161b);
+scene.background = new THREE.Color(0xbfc3c8);
 const renderer = new THREE.WebGLRenderer({antialias:true});
 renderer.setPixelRatio(devicePixelRatio);
 renderer.setSize(innerWidth, innerHeight);
@@ -42,136 +43,144 @@ document.body.appendChild(renderer.domElement);
 const pmrem = new THREE.PMREMGenerator(renderer);
 scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 
-const camera = new THREE.PerspectiveCamera(40, innerWidth/innerHeight, 1, 1000);
-camera.position.set(90, 20, 110);
+const camera = new THREE.PerspectiveCamera(35, innerWidth/innerHeight, 1, 1000);
+camera.position.set(80, 0, 150);
 const controls = new OrbitControls(camera, renderer.domElement);
-controls.target.set(0, 0, 0);
+controls.target.set(0, 12, 0);
 controls.enableDamping = true;
-scene.add(new THREE.DirectionalLight(0xffffff, 1.5).translateX(50).translateY(80).translateZ(60));
+const sun = new THREE.DirectionalLight(0xffffff, 1.2); sun.position.set(50, 80, 60);
+scene.add(sun);
 
 // ---- Malzemeler ----
-const metal = new THREE.MeshStandardMaterial({color:0xc9a24a, metalness:1, roughness:0.28});
+const nickel = new THREE.MeshStandardMaterial({color:0xc4c4c4, metalness:1, roughness:0.38});   // saten nikel
+const chrome = new THREE.MeshStandardMaterial({color:0xf0f0f0, metalness:0.9, roughness:0.22});   // parlak krom
 const glassMat = new THREE.MeshPhysicalMaterial({
-  color:0xffffff, metalness:0, roughness:0.02, transmission:1, thickness:1.2,
-  ior:1.52, transparent:true, opacity:1, envMapIntensity:1.6, clearcoat:1
+  color:0xeaf2f2, metalness:0, roughness:0.04, transparent:true, opacity:0.32,
+  ior:1.52, envMapIntensity:1.8, clearcoat:1, specularIntensity:1, depthWrite:false
 });
-const bulbMat = new THREE.MeshStandardMaterial({color:0xfff2c8, emissive:0xffd98a, emissiveIntensity:1.5});
+
+const lathe = (pts, mat) => new THREE.Mesh(
+  new THREE.LatheGeometry(pts.map(p => new THREE.Vector2(p[0], p[1])), 48), mat);
 
 // ================= İSKELET =================
 const skeleton = new THREE.Group(); skeleton.name = 'Iskelet';
 scene.add(skeleton);
+const add = (obj, name) => { obj.name = name; skeleton.add(obj); return obj; };
 
-function lathe(pts, mat = metal){
-  return new THREE.Mesh(new THREE.LatheGeometry(pts.map(p => new THREE.Vector2(p[0], p[1])), 40), mat);
+// Tavan başlığı (krom kubbe) + boyun
+add(lathe([[0,66],[1.6,66],[4,64.5],[6.2,62],[7,59.5],[0,59.5]], chrome), 'Tavan kubbesi');
+add(lathe([[0,59.5],[1.4,59.5],[1.4,57],[0,57]], chrome), 'Tavan boynu');
+
+// Üst çubuk (tavan boynundan zincire)
+const topRod = add(new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 7, 16), nickel), 'Ust cubuk');
+topRod.position.y = 54;
+
+// Zincir halkaları (dönüşümlü dik)
+const linkGeo = new THREE.TorusGeometry(0.7, 0.2, 8, 20); linkGeo.scale(1, 1.7, 1);
+const chain = new THREE.Group(); chain.name = 'Zincir'; skeleton.add(chain);
+for (let i = 0; i < CHAIN_LINKS; i++){
+  const l = new THREE.Mesh(linkGeo, chrome);
+  l.position.y = 50 - i * 1.35;
+  l.rotation.y = (i % 2) * Math.PI / 2;
+  chain.add(l);
 }
+// S şeklindeki destek teli (zincir boyunca)
+const sWire = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([
+  new THREE.Vector3(0, 28, 0), new THREE.Vector3(1.8, 25, 0.3), new THREE.Vector3(-1.4, 20, 0.2),
+  new THREE.Vector3(1.8, 15, 0.3), new THREE.Vector3(0, 12, 0)]), 40, 0.13, 8), chrome);
+add(sWire, 'S tel');
 
-// Tavan başlığı (canopy) + zincir/gövde
-const canopy = lathe([[0,60],[5,60],[7,58],[7,56],[3,54],[0,54]]); canopy.name='Tavan basligi';
-skeleton.add(canopy);
-const stem = lathe([[0,54],[1.2,54],[1.2,30],[2.5,28],[1.8,24],[3.2,20],[2,16],[0,16]]); stem.name='Ana govde';
-skeleton.add(stem);
+// Zincir altı kapağı + ana gövde çubuğu
+add(lathe([[0,14],[1.5,14],[1.5,12],[0.9,11],[0.9,-2],[0,-2]], nickel), 'Ana govde cubugu');
 
-// Orta gövde (balkabağı/vazo formu)
-const body = lathe([[0,16],[3,15],[6,10],[7,4],[5,-1],[3,-4],[4.5,-8],[2,-12],[0,-14]]); body.name='Orta govde';
-skeleton.add(body);
+// Merkez göbek (alt kısımda ampul görünür)
+add(lathe([[0,2],[3.2,2],[4,0.5],[4.2,-1.5],[3,-2.6],[0,-2.6]], nickel), 'Merkez gobek');
+const bulb = add(new THREE.Mesh(new THREE.SphereGeometry(1.4, 16, 12),
+  new THREE.MeshStandardMaterial({color:0xfff0c0, emissive:0xffd98a, emissiveIntensity:1.2})), 'Merkez ampul');
+bulb.position.y = -3;
 
-// İç halka
-const ring = new THREE.Mesh(new THREE.TorusGeometry(RING_R, 0.7, 12, 64), metal);
-ring.rotation.x = Math.PI/2; ring.position.y = 0; ring.name='Ic halka';
-skeleton.add(ring);
-
-// Kollar: S-kıvrımlı tüp + bobeş + mum soketi + ampul
-const armGroup = new THREE.Group(); armGroup.name='Kollar';
-skeleton.add(armGroup);
-function armCurve(){
-  return new THREE.CatmullRomCurve3([
-    new THREE.Vector3(5, 0, 0),
-    new THREE.Vector3(12, -6, 0),
-    new THREE.Vector3(20, -5, 0),
-    new THREE.Vector3(26, 2, 0),
-    new THREE.Vector3(ARM_R, 8, 0)
-  ]);
+// Yaprak telleri: her yaprak için bir yay tel + göbekten çıkan çubuk
+const petals = [];
+for (let k = 0; k < LOBES; k++){
+  const phi = k / LOBES * Math.PI * 2;
+  petals.push({phi, cx: Math.cos(phi) * PET_D, cz: -Math.sin(phi) * PET_D});
 }
-const curve = armCurve();
-const armGeo = new THREE.TubeGeometry(curve, 40, 0.55, 10, false);
-const bobGeo = lathe([[0,0],[3.2,0],[3.8,1.2],[2.4,1.8],[1.6,2.4],[0,2.4]]).geometry;
-const socketGeo = new THREE.CylinderGeometry(1.5, 1.7, 8, 16);
-const bulbGeo = new THREE.SphereGeometry(1.1, 12, 12);
-bulbGeo.scale(1, 1.8, 1);
+const wires = new THREE.Group(); wires.name = 'Yaprak telleri'; skeleton.add(wires);
+const hookGeo = new THREE.TorusGeometry(0.45, 0.1, 6, 14, Math.PI * 1.6);
+petals.forEach((p, k) => {
+  const arc = new THREE.Mesh(new THREE.TorusGeometry(PET_R, 0.25, 8, 48, SPAN * 2), nickel);
+  arc.rotation.x = -Math.PI / 2;
+  arc.rotation.z = p.phi - SPAN;
+  arc.position.set(p.cx, 0.9, p.cz);
+  arc.name = `Yaprak teli ${k+1}`; wires.add(arc);
+  const len = Math.hypot(p.cx, p.cz);
+  const spoke = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, len, 8), nickel);
+  spoke.rotation.z = Math.PI / 2; spoke.rotation.y = p.phi;
+  spoke.position.set(p.cx / 2, 0.9, p.cz / 2);
+  spoke.name = `Yaprak cubugu ${k+1}`; wires.add(spoke);
+  for (let j = 0; j < PER; j++){            // her prizmaya kanca
+    const a = p.phi + (j / (PER - 1) - 0.5) * 2 * SPAN;
+    const h = new THREE.Mesh(hookGeo, nickel);
+    h.position.set(p.cx + Math.cos(a) * PET_R, 1.2, p.cz - Math.sin(a) * PET_R);
+    h.rotation.y = a; h.name = `Kanca ${k+1}-${j+1}`; wires.add(h);
+  }
+});
 
-const armEnds = [];
+// Kıvrık kollar: gövdeden yukarı kavis yapıp aşağı bakan soket
+const armCurve = new THREE.CatmullRomCurve3([
+  new THREE.Vector3(0.9, 1, 0), new THREE.Vector3(3, 5, 0), new THREE.Vector3(6, 7.5, 0),
+  new THREE.Vector3(9.5, 6.5, 0), new THREE.Vector3(10.5, 4, 0)]);
+const armGeo = new THREE.TubeGeometry(armCurve, 32, 0.45, 10, false);
+const socketGeo = lathe([[0,0],[1.5,0],[1.7,1],[1.5,5.5],[1.1,6.5],[0,6.5]], nickel).geometry;
+const arms = new THREE.Group(); arms.name = 'Kollar'; skeleton.add(arms);
 for (let i = 0; i < ARMS; i++){
-  const a = i / ARMS * Math.PI * 2;
   const g = new THREE.Group(); g.name = `Kol ${i+1}`;
-  g.rotation.y = a;
-  const tube = new THREE.Mesh(armGeo, metal); g.add(tube);
-  const end = curve.getPoint(1);
-  const bob = new THREE.Mesh(bobGeo, metal); bob.position.copy(end).y -= 0.4; g.add(bob);
-  const sock = new THREE.Mesh(socketGeo, metal); sock.position.copy(end).y += 5.0; g.add(sock);
-  const bulb = new THREE.Mesh(bulbGeo, bulbMat); bulb.position.copy(end).y += 11; g.add(bulb);
-  armGroup.add(g);
-  armEnds.push({a, p: end});
+  g.rotation.y = i / ARMS * Math.PI * 2 + 0.3;
+  g.add(new THREE.Mesh(armGeo, nickel));
+  const sock = new THREE.Mesh(socketGeo, nickel);
+  sock.scale.setScalar(0.6); sock.rotation.x = Math.PI;       // aşağı bakar
+  sock.position.set(10.5, 4.6, 0);
+  g.add(sock);
+  arms.add(g);
 }
 
-// Alt süs (finial)
-const finial = lathe([[0,-14],[1.2,-14],[1.8,-17],[0.6,-20],[0,-22]]); finial.name='Alt sus';
-skeleton.add(finial);
+// ================= CAM PRİZMALAR =================
+const glass = new THREE.Group(); glass.name = 'Cam'; scene.add(glass);
 
-// ================= CAM PARÇALAR =================
-const glass = new THREE.Group(); glass.name = 'Cam';
-scene.add(glass);
-
-// Prizma: altıgen kesitli, sivri uçlu damla
-function prismGeo(len, r){
-  const pts = [[0,0],[r*0.8,0.1*len],[r,0.35*len],[r*0.85,0.85*len],[0,len]]
-    .map(p => new THREE.Vector2(p[0], p[1]));
-  const g = new THREE.LatheGeometry(pts, 6); // 6 yüzlü = prizma
-  g.translate(0, -len, 0); g.rotateX(Math.PI);  // sivri uç aşağı
+// Quadriedri prizma: dörtgen (eşkenar dörtgene yakın) kesit, alt ucu açılı kesilmiş.
+// Yerel eksenler: x = radyal (dışa), y = yukarı, z = teğet.
+function prismGeo(len, cut){
+  const w = 1.25, d = 1.25;                       // kesit yarı ölçüleri (radyal, teğet)
+  const s = new THREE.Shape();
+  const c = 0.38;                                  // 4 köşeli yıldız kesit
+  const st = [[w,0],[c,c],[0,d],[-c,c],[-w,0],[-c,-c],[0,-d],[c,-c]];
+  s.moveTo(st[0][0], st[0][1]); st.slice(1).forEach(p => s.lineTo(p[0], p[1])); s.closePath();
+  const g = new THREE.ExtrudeGeometry(s, {depth: len, bevelEnabled:false});
+  g.rotateX(Math.PI / 2);                         // extrude z → -y (aşağı)
+  const pos = g.attributes.position;
+  for (let i = 0; i < pos.count; i++){
+    if (pos.getY(i) < -len + 0.001) pos.setY(i, -len + cut * (pos.getX(i) + w) / (2 * w));
+  }
   g.computeVertexNormals();
   return g;
 }
-const dropGeo = prismGeo(7, 1.1);
-const longGeo = prismGeo(14, 1.5);
-const ballGeo = new THREE.SphereGeometry(1.2, 20, 14);
-
-function addPrism(parent, geo, x, y, z, name){
-  const m = new THREE.Mesh(geo, glassMat);
-  m.position.set(x, y, z); m.name = name;
-  parent.add(m);
-  return m;
-}
-
-// Halkadan sarkan uzun prizmalar
-const ringGlass = new THREE.Group(); ringGlass.name='Halka prizmalari'; glass.add(ringGlass);
-for (let i = 0; i < DROPS_RING; i++){
-  const a = i / DROPS_RING * Math.PI * 2;
-  addPrism(ringGlass, longGeo, Math.cos(a)*RING_R, -1.4, Math.sin(a)*RING_R, `Halka prizma ${i+1}`);
-}
-
-// Kol uçlarından sarkan prizma çemberleri (bobeş altında)
-const armGlass = new THREE.Group(); armGlass.name='Kol prizmalari'; glass.add(armGlass);
-armEnds.forEach((e, k) => {
-  const px = e.p.x * Math.cos(e.a), pz = -e.p.x * Math.sin(e.a);
-  for (let j = 0; j < PRISMS_PER_ARM; j++){
-    const b = j / PRISMS_PER_ARM * Math.PI * 2;
-    addPrism(armGlass, dropGeo, px + Math.cos(b)*3.0, e.p.y - 1.6, pz + Math.sin(b)*3.0, `Kol ${k+1} prizma ${j+1}`);
+const prism = prismGeo(PRISM_L, 3.5);   // alt uç dışta uzun, içte kısa
+petals.forEach((p, k) => {
+  const g = new THREE.Group(); g.name = `Yaprak ${k+1} prizmalari`; glass.add(g);
+  for (let j = 0; j < PER; j++){
+    const t = j / (PER - 1);
+    const a = p.phi + (t - 0.5) * 2 * SPAN;
+    const m = new THREE.Mesh(prism, glassMat);
+    m.position.set(p.cx + Math.cos(a) * PET_R, -0.3 - 1.2 * Math.abs(t - 0.5) * 0, p.cz - Math.sin(a) * PET_R);
+    m.rotation.y = a;
+    m.name = `Prizma ${k+1}-${j+1}`;
+    g.add(m);
   }
-  addPrism(armGlass, ballGeo, px, e.p.y - 4.2, pz, `Kol ${k+1} top`);
 });
 
-// Gövde çevresindeki cam toplar ve ortadan sarkan zincir prizma
-const bodyGlass = new THREE.Group(); bodyGlass.name='Govde camlari'; glass.add(bodyGlass);
-for (let i = 0; i < 8; i++){
-  const a = i/8*Math.PI*2;
-  const b = addPrism(bodyGlass, ballGeo, Math.cos(a)*7.5, 3, Math.sin(a)*7.5, `Govde top ${i+1}`);
-  b.scale.setScalar(1.6);
-}
-addPrism(bodyGlass, longGeo, 0, -22, 0, 'Alt uc prizma').scale.setScalar(1.6);
-
-// ---- UI: bileşenleri aç/kapat ----
+// ---- UI ----
 document.getElementById('skel').onchange = e => skeleton.visible = e.target.checked;
 document.getElementById('glass').onchange = e => glass.visible = e.target.checked;
-
 addEventListener('resize', () => {
   camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
