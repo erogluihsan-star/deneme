@@ -27,11 +27,10 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
 // ---- Parametreler (cm) ----
 const LOBES = 5, PER = 12;          // 5 yaprak x 12 = 60 prizma
-const PET_D = 10, PET_R = 7;       // yaprak dairesinin merkez uzaklığı / yarıçapı
+const PET_D = 12, PET_R = 10;   // dış çap = 2*(12+10) = 44 cm       // yaprak dairesinin merkez uzaklığı / yarıçapı
 const SPAN = 1.9;                   // yaprak yayı yarı açısı (rad)
-const PRISM_L = 36;
-const ARMS = 5;                                   // kısa kıvrık kollar
-const CHAIN_LINKS = 26;
+const PRISM_L = 28;                 // cam yüksekliği 28 cm
+const ARMS = 6;                                   // kısa kıvrık kollar
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xbfc3c8);
@@ -44,9 +43,9 @@ const pmrem = new THREE.PMREMGenerator(renderer);
 scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 
 const camera = new THREE.PerspectiveCamera(35, innerWidth/innerHeight, 1, 1000);
-camera.position.set(80, 0, 150);
+camera.position.set(100, 30, 190);
 const controls = new OrbitControls(camera, renderer.domElement);
-controls.target.set(0, 12, 0);
+controls.target.set(0, 28, 0);
 controls.enableDamping = true;
 const sun = new THREE.DirectionalLight(0xffffff, 1.2); sun.position.set(50, 80, 60);
 scene.add(sun);
@@ -67,31 +66,38 @@ const skeleton = new THREE.Group(); skeleton.name = 'Iskelet';
 scene.add(skeleton);
 const add = (obj, name) => { obj.name = name; skeleton.add(obj); return obj; };
 
+// Ölçüler (ürün sayfası): toplam yükseklik zincirle 120, gövde 56, çap 44, cam 28 x 3 cm.
+// y=0 cam üst hizası; cam -28'e sarkar, gövde üst ucu +28, tavan ucu +92.
+const TOP = 92, STEM_TOP = 28;
+
 // Tavan başlığı (krom kubbe) + boyun
-add(lathe([[0,66],[1.6,66],[4,64.5],[6.2,62],[7,59.5],[0,59.5]], chrome), 'Tavan kubbesi');
-add(lathe([[0,59.5],[1.4,59.5],[1.4,57],[0,57]], chrome), 'Tavan boynu');
+add(lathe([[0,TOP],[1.6,TOP],[4,TOP-1.5],[6.2,TOP-4],[7,TOP-6.5],[0,TOP-6.5]], chrome), 'Tavan kubbesi');
+add(lathe([[0,TOP-6.5],[1.4,TOP-6.5],[1.4,TOP-9],[0,TOP-9]], chrome), 'Tavan boynu');
 
 // Üst çubuk (tavan boynundan zincire)
 const topRod = add(new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 7, 16), nickel), 'Ust cubuk');
-topRod.position.y = 54;
+topRod.position.y = TOP - 12.5;
 
-// Zincir halkaları (dönüşümlü dik)
+// Zincir halkaları (dönüşümlü dik): gövde üstünden üst çubuğa kadar
 const linkGeo = new THREE.TorusGeometry(0.7, 0.2, 8, 20); linkGeo.scale(1, 1.7, 1);
 const chain = new THREE.Group(); chain.name = 'Zincir'; skeleton.add(chain);
+const chainBottom = STEM_TOP - 0.5, chainTop = TOP - 16;
+const CHAIN_LINKS = Math.round((chainTop - chainBottom) / 1.35);
 for (let i = 0; i < CHAIN_LINKS; i++){
   const l = new THREE.Mesh(linkGeo, chrome);
-  l.position.y = 50 - i * 1.35;
+  l.position.y = chainTop - i * (chainTop - chainBottom) / CHAIN_LINKS;
   l.rotation.y = (i % 2) * Math.PI / 2;
   chain.add(l);
 }
 // S şeklindeki destek teli (zincir boyunca)
+const sy = chainBottom + 3;
 const sWire = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([
-  new THREE.Vector3(0, 28, 0), new THREE.Vector3(1.8, 25, 0.3), new THREE.Vector3(-1.4, 20, 0.2),
-  new THREE.Vector3(1.8, 15, 0.3), new THREE.Vector3(0, 12, 0)]), 40, 0.13, 8), chrome);
+  new THREE.Vector3(0, sy + 16, 0), new THREE.Vector3(1.8, sy + 13, 0.3), new THREE.Vector3(-1.4, sy + 8, 0.2),
+  new THREE.Vector3(1.8, sy + 3, 0.3), new THREE.Vector3(0, sy, 0)]), 40, 0.13, 8), chrome);
 add(sWire, 'S tel');
 
-// Zincir altı kapağı + ana gövde çubuğu
-add(lathe([[0,14],[1.5,14],[1.5,12],[0.9,11],[0.9,-2],[0,-2]], nickel), 'Ana govde cubugu');
+// Ana gövde çubuğu: zincir bağlantısından göbeğe
+add(lathe([[0,STEM_TOP],[1.5,STEM_TOP],[1.5,STEM_TOP-2],[0.9,STEM_TOP-3],[0.9,-2],[0,-2]], nickel), 'Ana govde cubugu');
 
 // Merkez göbek (alt kısımda ampul görünür)
 add(lathe([[0,2],[3.2,2],[4,0.5],[4.2,-1.5],[3,-2.6],[0,-2.6]], nickel), 'Merkez gobek');
@@ -150,9 +156,9 @@ const glass = new THREE.Group(); glass.name = 'Cam'; scene.add(glass);
 // Quadriedri prizma: dörtgen (eşkenar dörtgene yakın) kesit, alt ucu açılı kesilmiş.
 // Yerel eksenler: x = radyal (dışa), y = yukarı, z = teğet.
 function prismGeo(len, cut){
-  const w = 1.25, d = 1.25;                       // kesit yarı ölçüleri (radyal, teğet)
+  const w = 1.5, d = 1.5;                         // cam genişliği 3 cm                       // kesit yarı ölçüleri (radyal, teğet)
   const s = new THREE.Shape();
-  const c = 0.38;                                  // 4 köşeli yıldız kesit
+  const c = 0.45;                                  // 4 köşeli yıldız kesit
   const st = [[w,0],[c,c],[0,d],[-c,c],[-w,0],[-c,-c],[0,-d],[c,-c]];
   s.moveTo(st[0][0], st[0][1]); st.slice(1).forEach(p => s.lineTo(p[0], p[1])); s.closePath();
   const g = new THREE.ExtrudeGeometry(s, {depth: len, bevelEnabled:false});
@@ -164,7 +170,7 @@ function prismGeo(len, cut){
   g.computeVertexNormals();
   return g;
 }
-const prism = prismGeo(PRISM_L, 3.5);   // alt uç dışta uzun, içte kısa
+const prism = prismGeo(PRISM_L, 4);   // alt uç dışta uzun, içte kısa
 petals.forEach((p, k) => {
   const g = new THREE.Group(); g.name = `Yaprak ${k+1} prizmalari`; glass.add(g);
   for (let j = 0; j < PER; j++){
