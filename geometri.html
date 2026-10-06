@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Quadriedri Geometri</title>
+<style>
+  html,body{margin:0;height:100%;background:#c8ccd1;font-family:system-ui,sans-serif;overflow:hidden;color:#222}
+  #ui{position:fixed;top:12px;left:12px;width:250px;background:#fffd;padding:10px 14px;border-radius:8px;font-size:13px}
+  label{display:flex;justify-content:space-between;align-items:center;margin:6px 0}
+  input[type=range]{width:120px}
+  canvas#sec{background:#fff;border-radius:6px;width:100%;margin-top:6px}
+  button{margin:6px 4px 0 0;padding:4px 10px}
+</style>
+</head>
+<body>
+<div id="ui">
+  <b>Kesit (üstten) ve ölçüler, cm</b>
+  <canvas id="sec" width="220" height="220"></canvas>
+  <label>Radyal kol <input id="a" type="range" min="0.8" max="2.5" step="0.05" value="1.5"><span></span></label>
+  <label>Teğet kol <input id="b" type="range" min="0.8" max="2.5" step="0.05" value="1.5"><span></span></label>
+  <label>İçbükeylik <input id="q" type="range" min="0" max="0.7" step="0.02" value="0.28"><span></span></label>
+  <label>Kol dönüşü° <input id="r" type="range" min="0" max="90" step="1" value="26"><span></span></label>
+  <label>Uzunluk <input id="l" type="range" min="10" max="40" step="0.5" value="28"><span></span></label>
+  <button id="obj">OBJ indir</button><button id="stl">STL indir</button>
+</div>
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+"three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(innerWidth, innerHeight); renderer.setPixelRatio(devicePixelRatio);
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0xc8ccd1);
+scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+const camera = new THREE.PerspectiveCamera(35, innerWidth/innerHeight, 0.5, 500);
+camera.position.set(28, -6, 38);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, -14, 0);
+const mat = new THREE.MeshPhysicalMaterial({color:0xe6f2ec, roughness:0.04, transparent:true, opacity:0.5,
+  clearcoat:1, envMapIntensity:1.8, depthWrite:false, side:THREE.DoubleSide});
+const edge = new THREE.LineBasicMaterial({color:0x345});
+const P = {a:1.5, b:1.5, q:0.28, r:26, l:28};
+
+// Kesit: 4 kol ucu (±a, 0) ve (0, ±b); kollar arası içbükey eğri (kontrol noktası merkeze yakın)
+function outline(){
+  const {a, b, q} = P, k = P.r * Math.PI / 180;
+  const tip = [[a,0],[0,b],[-a,0],[0,-b]], ctl = [[q,q],[-q,q],[-q,-q],[q,-q]];
+  const rot = ([x,y]) => [x*Math.cos(k) - y*Math.sin(k), x*Math.sin(k) + y*Math.cos(k)];
+  return {tip: tip.map(rot), ctl: ctl.map(rot)};
+}
+function shape(){
+  const {tip, ctl} = outline(), s = new THREE.Shape();
+  s.moveTo(...tip[0]);
+  for (let i = 0; i < 4; i++) s.quadraticCurveTo(...ctl[i], ...tip[(i+1)%4]);
+  return s;
+}
+
+let mesh, lines;
+function build(){
+  if (mesh){ scene.remove(mesh, lines); mesh.geometry.dispose(); lines.geometry.dispose(); }
+  const g = new THREE.ExtrudeGeometry(shape(), {depth:P.l, bevelEnabled:false, curveSegments:10});
+  g.rotateX(Math.PI/2);                         // y=0 üst, y=-l alt uç
+  mesh = new THREE.Mesh(g, mat);
+  lines = new THREE.LineSegments(new THREE.EdgesGeometry(g, 20), edge);
+  scene.add(mesh, lines);
+  document.querySelectorAll('#ui input').forEach(i => i.nextElementSibling.textContent = P[i.id]);
+  drawSection();
+}
+function drawSection(){
+  const c = document.getElementById('sec').getContext('2d'), S = 220/2 - 14, sc = S/2.5;
+  c.clearRect(0,0,220,220);
+  c.strokeStyle = '#ddd'; c.beginPath(); c.moveTo(110,0); c.lineTo(110,220); c.moveTo(0,110); c.lineTo(220,110); c.stroke();
+  const {tip, ctl} = outline(), T = ([x,y]) => [110 + x*sc, 110 - y*sc];
+  c.beginPath(); c.moveTo(...T(tip[0]));
+  for (let i = 0; i < 4; i++) c.quadraticCurveTo(...T(ctl[i]), ...T(tip[(i+1)%4]));
+  c.fillStyle = '#cfe5dc'; c.fill(); c.strokeStyle = '#234'; c.lineWidth = 1.5; c.stroke();
+}
+document.querySelectorAll('#ui input').forEach(i => i.oninput = () => { P[i.id] = +i.value; build(); });
+
+function download(name, text){
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text])); a.download = name; a.click();
+}
+function triangles(){      // [x,y,z] üçlüleri, her 3'ü bir üçgen
+  const g = mesh.geometry.index ? mesh.geometry.toNonIndexed() : mesh.geometry, p = g.attributes.position, v = [];
+  for (let i = 0; i < p.count; i++) v.push([p.getX(i), p.getY(i), p.getZ(i)]);
+  return v;
+}
+document.getElementById('obj').onclick = () => {
+  const v = triangles(); let t = 'o quadriedri\n';
+  v.forEach(p => t += `v ${p.join(' ')}\n`);
+  for (let i = 0; i < v.length; i += 3) t += `f ${i+1} ${i+2} ${i+3}\n`;
+  download('quadriedri.obj', t);
+};
+document.getElementById('stl').onclick = () => {
+  const v = triangles(); let t = 'solid quadriedri\n';
+  for (let i = 0; i < v.length; i += 3){
+    t += 'facet normal 0 0 0\n outer loop\n' + v.slice(i, i+3).map(p => `  vertex ${p.join(' ')}\n`).join('') + ' endloop\nendfacet\n';
+  }
+  download('quadriedri.stl', t + 'endsolid quadriedri\n');
+};
+
+addEventListener('resize', () => { camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+build();
+renderer.setAnimationLoop(() => { controls.update(); renderer.render(scene, camera); });
+</script>
+</body>
+</html>
