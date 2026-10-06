@@ -9,9 +9,9 @@ Kaynak: https://muranoclassics.com/products/murano-chandelier-60-clear-prism-gla
 - Fiyat: 2190 EUR (patinated chrome)
 
 ## Urunun kendi gorselleri (sayfada, repoda YOK)
-8830_2 ... 8830_10, 8830_6 (ana gorsel), 8830__1 -- hepsi `.webp`, muranoclassics.com/cdn/shop/files/ altinda.
+8830_2 ... 8830_10, 8830__1 -- artik `urun/gorseller/` icinde (`.webp`).
 
 ## Klasorler
-- `urun/` : bu urunun kaydedilmis sayfasi
+- `urun/` : bu urunun kaydedilmis sayfasi + `urun/gorseller/` (8830_*.webp, urunun kendi fotograflari)
 - `diger-urunler/` : sayfadaki "benzer urunler"in fotograflari (baska modeller)
 - `sayfa-dosyalari/` : css/js/bayrak svg gibi sayfa artiklari

@@ -54,7 +54,7 @@ scene.add(sun);
 const nickel = new THREE.MeshStandardMaterial({color:0xc4c4c4, metalness:1, roughness:0.38});   // saten nikel
 const chrome = new THREE.MeshStandardMaterial({color:0xf0f0f0, metalness:0.9, roughness:0.22});   // parlak krom
 const glassMat = new THREE.MeshPhysicalMaterial({
-  color:0xeaf2f2, metalness:0, roughness:0.04, transparent:true, opacity:0.32,
+  color:0xe6f2ec, metalness:0, roughness:0.04, transparent:true, opacity:0.34,
   ior:1.52, envMapIntensity:1.8, clearcoat:1, specularIntensity:1, depthWrite:false
 });
 
@@ -99,36 +99,46 @@ add(sWire, 'S tel');
 // Ana gövde çubuğu: zincir bağlantısından göbeğe
 add(lathe([[0,STEM_TOP],[1.5,STEM_TOP],[1.5,STEM_TOP-2],[0.9,STEM_TOP-3],[0.9,-2],[0,-2]], nickel), 'Ana govde cubugu');
 
-// Merkez göbek (alt kısımda ampul görünür)
-add(lathe([[0,2],[3.2,2],[4,0.5],[4.2,-1.5],[3,-2.6],[0,-2.6]], nickel), 'Merkez gobek');
-const bulb = add(new THREE.Mesh(new THREE.SphereGeometry(1.4, 16, 12),
-  new THREE.MeshStandardMaterial({color:0xfff0c0, emissive:0xffd98a, emissiveIntensity:1.2})), 'Merkez ampul');
-bulb.position.y = -3;
+// Merkez göbek: patineli nikel tüp + altında şeffaf ampuller
+const patina = new THREE.MeshStandardMaterial({color:0xa8a8a8, metalness:1, roughness:0.55});
+add(lathe([[0,2],[3,2],[3.2,0.5],[3.2,-2.5],[2.6,-3],[0,-3]], patina), 'Merkez gobek');
+const bulbMat = new THREE.MeshPhysicalMaterial({color:0xffffff, transparent:true, opacity:0.35, roughness:0.05, depthWrite:false});
+const bulbGeo = new THREE.SphereGeometry(1.6, 16, 12); bulbGeo.scale(1, 1.25, 1);
+const bulb = add(new THREE.Mesh(bulbGeo, bulbMat), 'Merkez ampul'); bulb.position.y = -4.5;
 
-// Yaprak telleri: her yaprak için bir yay tel + göbekten çıkan çubuk
+// Prizma konumları: yaprak dairesi üzerinde; merkeze yaklaştıkça aşağı sarkar (yandan "V" siluet)
 const petals = [];
 for (let k = 0; k < LOBES; k++){
   const phi = k / LOBES * Math.PI * 2;
   petals.push({phi, cx: Math.cos(phi) * PET_D, cz: -Math.sin(phi) * PET_D});
 }
-const wires = new THREE.Group(); wires.name = 'Yaprak telleri'; skeleton.add(wires);
-const hookGeo = new THREE.TorusGeometry(0.45, 0.1, 6, 14, Math.PI * 1.6);
+const V_DEPTH = 6;
+function prismPos(p, j){
+  const a = p.phi + (j / (PER - 1) - 0.5) * 2 * SPAN;
+  const x = p.cx + Math.cos(a) * PET_R, z = p.cz - Math.sin(a) * PET_R;
+  const y = -0.2 - V_DEPTH * (1 - Math.min(1, Math.hypot(x, z) / (PET_D + PET_R)));
+  return {a, x, y, z};
+}
+// Dal teller: göbek kenarından her prizmanın askı kıskacına kadar ince nikel çubuk
+const rod = (a, b, r, mat) => {
+  const d = new THREE.Vector3().subVectors(b, a);
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, d.length(), 6), mat);
+  m.position.copy(a).addScaledVector(d, 0.5);
+  m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize());
+  return m;
+};
+const wires = new THREE.Group(); wires.name = 'Dal teller'; skeleton.add(wires);
 petals.forEach((p, k) => {
-  const arc = new THREE.Mesh(new THREE.TorusGeometry(PET_R, 0.25, 8, 48, SPAN * 2), nickel);
-  arc.rotation.x = -Math.PI / 2;
-  arc.rotation.z = p.phi - SPAN;
-  arc.position.set(p.cx, 0.9, p.cz);
-  arc.name = `Yaprak teli ${k+1}`; wires.add(arc);
-  const len = Math.hypot(p.cx, p.cz);
-  const spoke = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, len, 8), nickel);
-  spoke.rotation.z = Math.PI / 2; spoke.rotation.y = p.phi;
-  spoke.position.set(p.cx / 2, 0.9, p.cz / 2);
-  spoke.name = `Yaprak cubugu ${k+1}`; wires.add(spoke);
-  for (let j = 0; j < PER; j++){            // her prizmaya kanca
-    const a = p.phi + (j / (PER - 1) - 0.5) * 2 * SPAN;
-    const h = new THREE.Mesh(hookGeo, nickel);
-    h.position.set(p.cx + Math.cos(a) * PET_R, 1.2, p.cz - Math.sin(a) * PET_R);
-    h.rotation.y = a; h.name = `Kanca ${k+1}-${j+1}`; wires.add(h);
+  // ana dal: göbekten yaprak merkezine; ince dallar oradan her prizmaya yelpaze gibi
+  const hub = new THREE.Vector3(Math.cos(p.phi) * 3.2, 0.5, -Math.sin(p.phi) * 3.2);
+  const fork = new THREE.Vector3(p.cx * 0.8, 0.9, p.cz * 0.8);
+  const trunk = rod(hub, fork, 0.42, nickel); trunk.name = `Ana dal ${k+1}`; wires.add(trunk);
+  for (let j = 0; j < PER; j++){
+    const q = prismPos(p, j);
+    const tip = new THREE.Vector3(q.x, q.y + 0.9, q.z);
+    const r = rod(fork, tip, 0.15, nickel); r.name = `Ince dal ${k+1}-${j+1}`; wires.add(r);
+    const clip = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.9, 0.5), nickel);   // askı kıskacı
+    clip.position.set(q.x, q.y + 0.45, q.z); clip.name = `Kiskac ${k+1}-${j+1}`; wires.add(clip);
   }
 });
 
@@ -147,38 +157,36 @@ for (let i = 0; i < ARMS; i++){
   sock.scale.setScalar(0.6); sock.rotation.x = Math.PI;       // aşağı bakar
   sock.position.set(10.5, 4.6, 0);
   g.add(sock);
+  const ab = new THREE.Mesh(bulbGeo, bulbMat); ab.position.set(10.5, 0.6, 0); g.add(ab);
   arms.add(g);
 }
 
 // ================= CAM PRİZMALAR =================
 const glass = new THREE.Group(); glass.name = 'Cam'; scene.add(glass);
 
-// Quadriedri prizma: dörtgen (eşkenar dörtgene yakın) kesit, alt ucu açılı kesilmiş.
-// Yerel eksenler: x = radyal (dışa), y = yukarı, z = teğet.
-function prismGeo(len, cut){
-  const w = 1.5, d = 1.5;                         // cam genişliği 3 cm                       // kesit yarı ölçüleri (radyal, teğet)
+// Quadriedri prizma: kıvrık içbükey kenarlı 4 kollu yıldız kesit, alt uç düz.
+function prismGeo(len){
+  const w = 1.5, q = 0.28;                         // kol ucu yarı mesafe (3 cm genişlik), kenar içbükeyliği
   const s = new THREE.Shape();
-  const c = 0.45;                                  // 4 köşeli yıldız kesit
-  const st = [[w,0],[c,c],[0,d],[-c,c],[-w,0],[-c,-c],[0,-d],[c,-c]];
-  s.moveTo(st[0][0], st[0][1]); st.slice(1).forEach(p => s.lineTo(p[0], p[1])); s.closePath();
-  const g = new THREE.ExtrudeGeometry(s, {depth: len, bevelEnabled:false});
+  s.moveTo(w, 0);
+  s.quadraticCurveTo(q, q, 0, w);
+  s.quadraticCurveTo(-q, q, -w, 0);
+  s.quadraticCurveTo(-q, -q, 0, -w);
+  s.quadraticCurveTo(q, -q, w, 0);
+  const g = new THREE.ExtrudeGeometry(s, {depth: len, bevelEnabled:false, curveSegments:6});
   g.rotateX(Math.PI / 2);                         // extrude z → -y (aşağı)
-  const pos = g.attributes.position;
-  for (let i = 0; i < pos.count; i++){
-    if (pos.getY(i) < -len + 0.001) pos.setY(i, -len + cut * (pos.getX(i) + w) / (2 * w));
-  }
+  g.rotateY(0.45);                                // yıldız kolları radyal doğrultudan hafif dönük
   g.computeVertexNormals();
   return g;
 }
-const prism = prismGeo(PRISM_L, 4);   // alt uç dışta uzun, içte kısa
+const prism = prismGeo(PRISM_L);
 petals.forEach((p, k) => {
   const g = new THREE.Group(); g.name = `Yaprak ${k+1} prizmalari`; glass.add(g);
   for (let j = 0; j < PER; j++){
-    const t = j / (PER - 1);
-    const a = p.phi + (t - 0.5) * 2 * SPAN;
+    const q = prismPos(p, j);
     const m = new THREE.Mesh(prism, glassMat);
-    m.position.set(p.cx + Math.cos(a) * PET_R, -0.3 - 1.2 * Math.abs(t - 0.5) * 0, p.cz - Math.sin(a) * PET_R);
-    m.rotation.y = a;
+    m.position.set(q.x, q.y, q.z);
+    m.rotation.y = q.a;
     m.name = `Prizma ${k+1}-${j+1}`;
     g.add(m);
   }
