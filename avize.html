@@ -30,7 +30,7 @@ const LOBES = 5, PER = 12;          // 5 kol x 12 quadriedri = 60 prizma
 const PET_D = 12, PET_R = 10;   // dış çap = 2*(12+10) = 44 cm       // yaprak dairesinin merkez uzaklığı / yarıçapı
 const SPAN = 1.9;                   // kol yayı yarı açısı (rad)
 const SWIRL = 0.55;                 // kolların çark gibi kayması (rad)
-const STEP = 0.22;                  // yay boyunca her prizmanın kademeli sarkması (cm)
+const STEP = 0.75;                  // her prizma bir öncekinden bu kadar (cm) aşağıda; 5 kolda aynı tekrar eder
 const PRISM_L = 28;                 // cam yüksekliği 28 cm
 const ARMS = 6;                                   // kısa kıvrık kollar
 
@@ -108,17 +108,16 @@ const bulbMat = new THREE.MeshPhysicalMaterial({color:0xffffff, transparent:true
 const bulbGeo = new THREE.SphereGeometry(1.6, 16, 12); bulbGeo.scale(1, 1.25, 1);
 const bulb = add(new THREE.Mesh(bulbGeo, bulbMat), 'Merkez ampul'); bulb.position.y = -4.5;
 
-// Prizma konumları: yaprak dairesi üzerinde; merkeze yaklaştıkça aşağı sarkar (yandan "V" siluet)
+// Prizma konumları: kol dairesi üzerinde; her kolda 12 prizma merdiven gibi kademeli alçalır
 const petals = [];
 for (let k = 0; k < LOBES; k++){
   const phi = k / LOBES * Math.PI * 2;
   petals.push({phi, cx: Math.cos(phi) * PET_D, cz: -Math.sin(phi) * PET_D});
 }
-const V_DEPTH = 6;
 function prismPos(p, j){
   const a = p.phi + SWIRL + (j / (PER - 1) - 0.5) * 2 * SPAN;
   const x = p.cx + Math.cos(a) * PET_R, z = p.cz - Math.sin(a) * PET_R;
-  const y = -0.2 - STEP * j - V_DEPTH * (1 - Math.min(1, Math.hypot(x, z) / (PET_D + PET_R)));
+  const y = -0.2 - STEP * j;                 // kademeli kot: kollar arası simetrik
   return {a, x, y, z};
 }
 // Dal teller: göbek kenarından her prizmanın askı kıskacına kadar ince nikel çubuk
